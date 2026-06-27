@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.dms.server.mapper.RoomMapper">
+
+    <!-- 部屋（空き室）结果映射 -->
+    <resultMap id="VacancyVOMap" type="com.dms.server.entity.vo.VacancyVO">
+        <id     column="id"          property="id"/>
+        <result column="dorm_id"     property="dormId"/>
+        <result column="dorm_name"   property="dormName"/>
+        <result column="name"        property="name"/>
+        <result column="area"        property="area"/>
+        <result column="status"      property="status"/>
+        <result column="gender"      property="gender"/>
+        <result column="dorm_type"   property="dormType"/>
+        <result column="dorm_region" property="dormRegion"/>
+        <result column="dorm_layout" property="dormLayout"/>
+    </resultMap>
+
+    <!-- 查询条件片段 -->
+    <sql id="whereCondition">
+        <where>
+            r.is_deleted = 0
+            AND d.is_deleted = 0
+            <if test="gender != null and gender != '' and gender != 'all'">
+                AND r.gender = #{gender}
+            </if>
+            <if test="region != null and region.size() > 0">
+                AND d.region IN
+                <foreach collection="region" item="reg" open="(" separator="," close=")">
+                    #{reg}
+                </foreach>
+            </if>
+            <if test="status != null and status != ''">
+                AND r.status = #{status}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 查询部屋列表（关联寮信息，支持分页） -->
+    <select id="selectVacancyList" resultMap="VacancyVOMap">
+        SELECT
+            r.id,
+            r.dorm_id,
+            r.dorm_name,
+            r.name,
+            r.area,
+            r.status,
+            r.gender,
+            d.type  AS dorm_type,
+            d.region AS dorm_region,
+            d.layout AS dorm_layout
+        FROM room_info r
+        LEFT JOIN dorm_info d ON d.id = r.dorm_id AND d.is_deleted = 0
+        <include refid="whereCondition"/>
+        ORDER BY r.dorm_id ASC, r.id ASC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <!-- 查询部屋总数 -->
+    <select id="countVacancyList" resultType="java.lang.Long">
+        SELECT COUNT(r.id)
+        FROM room_info r
+        LEFT JOIN dorm_info d ON d.id = r.dorm_id AND d.is_deleted = 0
+        <include refid="whereCondition"/>
+    </select>
+
+    <!-- 根据ID查询部屋 -->
+    <select id="selectById" resultType="com.dms.server.entity.RoomInfo">
+        SELECT
+            id, dorm_id, dorm_name, name, area, status, gender,
+            is_deleted, create_time, update_time
+        FROM room_info
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <!-- 更新部屋状态 -->
+    <update id="updateRoomStatus">
+        UPDATE room_info
+        SET status = #{status}, update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <!-- 统计指定寮的入居部屋数 -->
+    <select id="countOccupiedByDormId" resultType="java.lang.Integer">
+        SELECT COUNT(id)
+        FROM room_info
+        WHERE dorm_id = #{dormId}
+          AND status = 'occupied'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 统计指定寮的总部屋数 -->
+    <select id="countRoomsByDormId" resultType="java.lang.Integer">
+        SELECT COUNT(id)
+        FROM room_info
+        WHERE dorm_id = #{dormId} AND is_deleted = 0
+    </select>
+
+    <!-- 统计全体总部屋数 -->
+    <select id="countTotalRooms" resultType="java.lang.Integer">
+        SELECT COUNT(id) FROM room_info WHERE is_deleted = 0
+    </select>
+
+    <!-- 统计全体入居部屋数 -->
+    <select id="countTotalOccupied" resultType="java.lang.Integer">
+        SELECT COUNT(id) FROM room_info WHERE status = 'occupied' AND is_deleted = 0
+    </select>
+
+</mapper>

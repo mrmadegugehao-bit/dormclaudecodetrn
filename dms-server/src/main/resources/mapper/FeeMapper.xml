@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.dms.server.mapper.FeeMapper">
+
+    <!-- 寮費 VO 结果映射 -->
+    <resultMap id="FeeVOMap" type="com.dms.server.entity.vo.FeeVO">
+        <id     column="id"         property="id"/>
+        <result column="year"       property="year"/>
+        <result column="month"      property="month"/>
+        <result column="emp_id"     property="empId"/>
+        <result column="emp_name"   property="empName"/>
+        <result column="emp_dept"   property="empDept"/>
+        <result column="dorm_name"  property="dormName"/>
+        <result column="room_name"  property="roomName"/>
+        <result column="area"       property="area"/>
+        <result column="days"       property="days"/>
+        <result column="total_days" property="totalDays"/>
+        <result column="unit_price" property="unitPrice"/>
+        <result column="amount"     property="amount"/>
+        <result column="status"     property="status"/>
+    </resultMap>
+
+    <!-- 按年月查询寮費列表 -->
+    <select id="selectFeeList" resultMap="FeeVOMap">
+        SELECT
+            id, year, month, emp_id, emp_name, emp_dept,
+            dorm_name, room_name, area, days, total_days,
+            unit_price, amount, status
+        FROM fee_record
+        WHERE year = #{year}
+          AND month = #{month}
+          AND is_deleted = 0
+        ORDER BY emp_id ASC
+    </select>
+
+    <!-- 根据ID查询寮費记录 -->
+    <select id="selectById" resultType="com.dms.server.entity.FeeRecord">
+        SELECT
+            id, year, month, emp_id, emp_name, emp_dept,
+            dorm_name, room_name, area, days, total_days,
+            unit_price, amount, status, is_deleted, create_time, update_time
+        FROM fee_record
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <!-- 批量新增寮費记录 -->
+    <insert id="insertFeeBatch">
+        INSERT INTO fee_record (
+            year, month, emp_id, emp_name, emp_dept,
+            dorm_name, room_name, area, days, total_days,
+            unit_price, amount, status, is_deleted, create_time, update_time
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.year}, #{item.month}, #{item.empId}, #{item.empName}, #{item.empDept},
+                #{item.dormName}, #{item.roomName}, #{item.area}, #{item.days}, #{item.totalDays},
+                #{item.unitPrice}, #{item.amount}, 'pending', 0, NOW(), NOW()
+            )
+        </foreach>
+    </insert>
+
+    <!-- 删除指定年月的所有寮費记录（物理删除，计算前清空） -->
+    <delete id="deleteFeeByYearMonth">
+        DELETE FROM fee_record
+        WHERE year = #{year} AND month = #{month}
+    </delete>
+
+    <!-- 单件确定 -->
+    <update id="confirmFeeById">
+        UPDATE fee_record
+        SET status = 'confirmed', update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <!-- 全件确定：批量更新指定年月为 confirmed -->
+    <update id="confirmAllFees">
+        UPDATE fee_record
+        SET status = 'confirmed', update_time = NOW()
+        WHERE year = #{year}
+          AND month = #{month}
+          AND is_deleted = 0
+    </update>
+
+</mapper>

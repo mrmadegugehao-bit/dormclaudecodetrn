@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.dms.server.mapper.OccupancyMapper">
+
+    <!-- 入退寮 VO 结果映射 -->
+    <resultMap id="OccupancyVOMap" type="com.dms.server.entity.vo.OccupancyVO">
+        <id     column="id"             property="id"/>
+        <result column="emp_id"         property="empId"/>
+        <result column="emp_name"       property="empName"/>
+        <result column="emp_type"       property="empType"/>
+        <result column="dorm_id"        property="dormId"/>
+        <result column="dorm_name"      property="dormName"/>
+        <result column="room_id"        property="roomId"/>
+        <result column="room_name"      property="roomName"/>
+        <result column="check_in_date"  property="checkInDate"/>
+        <result column="check_out_date" property="checkOutDate"/>
+        <result column="status"         property="status"/>
+        <result column="reason"         property="reason"/>
+    </resultMap>
+
+    <!-- 通用查询列 -->
+    <sql id="voColumns">
+        id, emp_id, emp_name, emp_type, dorm_id, dorm_name,
+        room_id, room_name, check_in_date, check_out_date, status, reason
+    </sql>
+
+    <!-- 查询条件片段 -->
+    <sql id="whereCondition">
+        <where>
+            is_deleted = 0
+            <if test="empName != null and empName != ''">
+                AND emp_name LIKE CONCAT('%', #{empName}, '%')
+            </if>
+            <if test="dormName != null and dormName != ''">
+                AND dorm_name LIKE CONCAT('%', #{dormName}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="checkInStart != null and checkInStart != ''">
+                AND check_in_date >= #{checkInStart}
+            </if>
+            <if test="checkInEnd != null and checkInEnd != ''">
+                AND check_in_date &lt;= #{checkInEnd}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 查询入退寮列表（按ID降序，支持分页） -->
+    <select id="selectOccupancyList" resultMap="OccupancyVOMap">
+        SELECT <include refid="voColumns"/>
+        FROM occupancy_record
+        <include refid="whereCondition"/>
+        ORDER BY id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <!-- 查询入退寮总数 -->
+    <select id="countOccupancyList" resultType="java.lang.Long">
+        SELECT COUNT(id)
+        FROM occupancy_record
+        <include refid="whereCondition"/>
+    </select>
+
+    <!-- 根据ID查询记录 -->
+    <select id="selectById" resultType="com.dms.server.entity.OccupancyRecord">
+        SELECT
+            id, emp_id, emp_name, emp_type, dorm_id, dorm_name,
+            room_id, room_name, check_in_date, check_out_date, status, reason,
+            is_deleted, create_time, update_time
+        FROM occupancy_record
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <!-- 新增入寮记录 -->
+    <insert id="insertOccupancy" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO occupancy_record (
+            emp_id, emp_name, emp_type, dorm_id, dorm_name,
+            room_id, room_name, check_in_date, check_out_date, status, reason,
+            is_deleted, create_time, update_time
+        ) VALUES (
+            #{empId}, #{empName}, #{empType}, #{dormId}, #{dormName},
+            #{roomId}, #{roomName}, #{checkInDate}, NULL, 'active', NULL,
+            0, NOW(), NOW()
+        )
+    </insert>
+
+    <!-- 退寮：更新状态、退寮日期和事由 -->
+    <update id="checkOut">
+        UPDATE occupancy_record
+        SET status = 'checked_out',
+            check_out_date = #{dto.checkOutDate},
+            reason = #{dto.reason},
+            update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <!-- 查询最新N条入退寮记录 -->
+    <select id="selectRecentOccupancy" resultMap="OccupancyVOMap">
+        SELECT <include refid="voColumns"/>
+        FROM occupancy_record
+        WHERE is_deleted = 0
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 查询当前所有入居中的记录（用于计算寮費） -->
+    <select id="selectActiveOccupancyList" resultType="com.dms.server.entity.OccupancyRecord">
+        SELECT
+            id, emp_id, emp_name, emp_type, dorm_id, dorm_name,
+            room_id, room_name, check_in_date, check_out_date, status, reason
+        FROM occupancy_record
+        WHERE status = 'active' AND is_deleted = 0
+    </select>
+
+    <!-- 查询长期入居警告（入居超过5年），关联 employee_info 获取部门 -->
+    <select id="selectLongTermWarnings" resultType="com.dms.server.entity.vo.DashboardVO$LongTermWarningVO">
+        SELECT
+            o.emp_name                                         AS name,
+            o.dorm_name                                        AS dormName,
+            o.room_name                                        AS roomName,
+            TIMESTAMPDIFF(YEAR, o.check_in_date, CURDATE())   AS years,
+            COALESCE(e.division, e.origin)                     AS dept
+        FROM occupancy_record o
+        LEFT JOIN employee_info e ON e.id = o.emp_id AND e.is_deleted = 0
+        WHERE o.status = 'active'
+          AND o.is_deleted = 0
+          AND DATEDIFF(CURDATE(), o.check_in_date) > (5 * 365)
+        ORDER BY o.check_in_date ASC
+    </select>
+
+    <!-- 按月统计近N个月的入居率（折线图），以每月最后一天为时间点 -->
+    <select id="selectMonthlyOccupancyRate" resultType="com.dms.server.entity.vo.DashboardVO$RateDataVO">
+        SELECT
+            DATE_FORMAT(m.month_end, '%Y/%m') AS month,
+            ROUND(
+                IFNULL(COUNT(o.id), 0) * 100.0
+                / NULLIF((SELECT COUNT(id) FROM room_info WHERE is_deleted = 0), 0)
+            ) AS rate
+        FROM (
+            SELECT LAST_DAY(DATE_SUB(CURDATE(), INTERVAL n MONTH)) AS month_end
+            FROM (
+                SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2
+                UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5
+            ) nums
+            WHERE n &lt; #{months}
+        ) m
+        LEFT JOIN occupancy_record o
+            ON  o.is_deleted = 0
+            AND o.check_in_date &lt;= m.month_end
+            AND (o.check_out_date IS NULL OR o.check_out_date &gt; m.month_end)
+        GROUP BY m.month_end
+        ORDER BY m.month_end ASC
+    </select>
+
+    <!-- 按月统计近N个月的入退寮件数 -->
+    <select id="selectMonthlyStats" resultType="com.dms.server.entity.vo.DashboardVO$MonthlyDataVO">
+        SELECT
+            DATE_FORMAT(month_date, '%Y/%m') AS month,
+            SUM(check_in_count)              AS checkIn,
+            SUM(check_out_count)             AS checkOut
+        FROM (
+            SELECT
+                DATE_FORMAT(check_in_date, '%Y-%m-01')  AS month_date,
+                COUNT(id)                               AS check_in_count,
+                0                                       AS check_out_count
+            FROM occupancy_record
+            WHERE is_deleted = 0
+              AND check_in_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL #{months} MONTH)
+            GROUP BY DATE_FORMAT(check_in_date, '%Y-%m-01')
+            UNION ALL
+            SELECT
+                DATE_FORMAT(check_out_date, '%Y-%m-01') AS month_date,
+                0                                       AS check_in_count,
+                COUNT(id)                               AS check_out_count
+            FROM occupancy_record
+            WHERE is_deleted = 0
+              AND status = 'checked_out'
+              AND check_out_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL #{months} MONTH)
+            GROUP BY DATE_FORMAT(check_out_date, '%Y-%m-01')
+        ) t
+        GROUP BY month_date
+        ORDER BY month_date ASC
+    </select>
+
+</mapper>

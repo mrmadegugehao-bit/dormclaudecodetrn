@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.dms.server.mapper.DormMapper">
+
+    <!-- 寮结果映射 -->
+    <resultMap id="DormVOMap" type="com.dms.server.entity.vo.DormVO">
+        <id     column="id"            property="id"/>
+        <result column="name"          property="name"/>
+        <result column="address"       property="address"/>
+        <result column="type"          property="type"/>
+        <result column="layout"        property="layout"/>
+        <result column="region"        property="region"/>
+        <result column="total_rooms"   property="totalRooms"/>
+        <result column="status"        property="status"/>
+        <result column="occupied_rooms" property="occupiedRooms"/>
+        <result column="room_count"    property="roomCount"/>
+    </resultMap>
+
+    <!-- 通用查询列 -->
+    <sql id="baseColumns">
+        d.id,
+        d.name,
+        d.address,
+        d.type,
+        d.layout,
+        d.region,
+        d.total_rooms,
+        d.status,
+        -- 入居部屋数聚合
+        COUNT(CASE WHEN r.status = 'occupied' AND r.is_deleted = 0 THEN 1 END) AS occupied_rooms,
+        COUNT(CASE WHEN r.is_deleted = 0 THEN 1 END) AS room_count
+    </sql>
+
+    <!-- 查询条件片段 -->
+    <sql id="whereCondition">
+        <where>
+            d.is_deleted = 0
+            <if test="name != null and name != ''">
+                AND d.name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="type != null and type != ''">
+                AND d.type = #{type}
+            </if>
+            <if test="region != null and region != ''">
+                AND d.region = #{region}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 查询寮列表（含入居部屋数，支持分页） -->
+    <select id="selectDormList" resultMap="DormVOMap">
+        SELECT
+            <include refid="baseColumns"/>
+        FROM dorm_info d
+        LEFT JOIN room_info r ON r.dorm_id = d.id AND r.is_deleted = 0
+        <include refid="whereCondition"/>
+        GROUP BY d.id, d.name, d.address, d.type, d.layout, d.region, d.total_rooms, d.status
+        ORDER BY d.id ASC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <!-- 查询寮总数（分页用） -->
+    <select id="countDormList" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT d.id)
+        FROM dorm_info d
+        <include refid="whereCondition"/>
+    </select>
+
+    <!-- 根据ID查询寮 -->
+    <select id="selectById" resultType="com.dms.server.entity.DormInfo">
+        SELECT
+            id, name, address, type, layout, region,
+            total_rooms, status, is_deleted, create_time, update_time
+        FROM dorm_info
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <!-- 新增寮 -->
+    <insert id="insertDorm" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO dorm_info (name, address, type, layout, region, total_rooms, status, is_deleted, create_time, update_time)
+        VALUES (#{name}, #{address}, #{type}, #{layout}, #{region}, #{totalRooms}, 1, 0, NOW(), NOW())
+    </insert>
+
+    <!-- 更新寮 -->
+    <update id="updateDorm">
+        UPDATE dorm_info
+        <set>
+            <if test="name != null and name != ''">name = #{name},</if>
+            <if test="address != null and address != ''">address = #{address},</if>
+            <if test="type != null and type != ''">type = #{type},</if>
+            <if test="layout != null and layout != ''">layout = #{layout},</if>
+            <if test="region != null and region != ''">region = #{region},</if>
+            <if test="totalRooms != null">total_rooms = #{totalRooms},</if>
+            update_time = NOW()
+        </set>
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <!-- 逻辑删除寮 -->
+    <update id="deleteDormById">
+        UPDATE dorm_info
+        SET is_deleted = 1, update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+</mapper>

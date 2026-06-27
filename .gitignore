@@ -1,0 +1,25 @@
+# Frontend
+dms-frontend/node_modules/
+dms-frontend/dist/
+dms-frontend/.env.local
+dms-frontend/.env.*.local
+
+# Backend
+dms-server/target/
+dms-server/src/main/resources/application.yml
+dms-server/*.jar
+dms-server/.mvn/wrapper/maven-wrapper.jar
+dms-server/mvnw
+dms-server/mvnw.cmd
+dms-server/.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

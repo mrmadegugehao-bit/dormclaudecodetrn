@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.dms.server.mapper.EmployeeMapper">
+
+    <!-- 社員结果映射 -->
+    <resultMap id="EmployeeVOMap" type="com.dms.server.entity.vo.EmployeeVO">
+        <id     column="id"              property="id"/>
+        <result column="emp_id"          property="empId"/>
+        <result column="name"            property="name"/>
+        <result column="type"            property="type"/>
+        <result column="gender"          property="gender"/>
+        <result column="dept"            property="dept"/>
+        <result column="division"        property="division"/>
+        <result column="emp_type"        property="empType"/>
+        <result column="mobile"          property="mobile"/>
+        <result column="email"           property="email"/>
+        <result column="first_check_in"  property="firstCheckIn"/>
+        <result column="origin"          property="origin"/>
+        <result column="biz_type"        property="bizType"/>
+        <result column="arrival_date"    property="arrivalDate"/>
+        <result column="departure_date"  property="departureDate"/>
+    </resultMap>
+
+    <!-- 通用查询列 -->
+    <sql id="baseColumns">
+        id, emp_id, name, type, gender,
+        dept, division, emp_type, mobile, email, first_check_in,
+        origin, biz_type, arrival_date, departure_date
+    </sql>
+
+    <!-- 查询条件片段 -->
+    <sql id="whereCondition">
+        <where>
+            is_deleted = 0
+            <if test="type != null and type != ''">
+                AND type = #{type}
+            </if>
+            <if test="name != null and name != ''">
+                AND name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="empId != null and empId != ''">
+                AND emp_id LIKE CONCAT('%', #{empId}, '%')
+            </if>
+        </where>
+    </sql>
+
+    <!-- 查询社員列表（支持分页） -->
+    <select id="selectEmployeeList" resultMap="EmployeeVOMap">
+        SELECT <include refid="baseColumns"/>
+        FROM employee_info
+        <include refid="whereCondition"/>
+        ORDER BY id ASC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <!-- 查询社員总数 -->
+    <select id="countEmployeeList" resultType="java.lang.Long">
+        SELECT COUNT(id)
+        FROM employee_info
+        <include refid="whereCondition"/>
+    </select>
+
+    <!-- 根据ID查询社員 -->
+    <select id="selectById" resultType="com.dms.server.entity.EmployeeInfo">
+        SELECT
+            id, emp_id, name, type, gender,
+            dept, division, emp_type, mobile, email, first_check_in,
+            origin, biz_type, arrival_date, departure_date,
+            is_deleted, create_time, update_time
+        FROM employee_info
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <!-- 新增社員 -->
+    <insert id="insertEmployee" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO employee_info (
+            emp_id, name, type, gender,
+            dept, division, emp_type, mobile, email, first_check_in,
+            origin, biz_type, arrival_date, departure_date,
+            is_deleted, create_time, update_time
+        ) VALUES (
+            #{empId}, #{name}, #{type}, #{gender},
+            #{dept}, #{division}, #{empType}, #{mobile}, #{email}, #{firstCheckIn},
+            #{origin}, #{bizType}, #{arrivalDate}, #{departureDate},
+            0, NOW(), NOW()
+        )
+    </insert>
+
+    <!-- 更新社員 -->
+    <update id="updateEmployee">
+        UPDATE employee_info
+        <set>
+            <if test="name != null and name != ''">name = #{name},</if>
+            <if test="gender != null and gender != ''">gender = #{gender},</if>
+            <if test="dept != null">dept = #{dept},</if>
+            <if test="division != null">division = #{division},</if>
+            <if test="empType != null">emp_type = #{empType},</if>
+            <if test="mobile != null">mobile = #{mobile},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="firstCheckIn != null">first_check_in = #{firstCheckIn},</if>
+            <if test="origin != null">origin = #{origin},</if>
+            <if test="bizType != null">biz_type = #{bizType},</if>
+            <if test="arrivalDate != null">arrival_date = #{arrivalDate},</if>
+            <if test="departureDate != null">departure_date = #{departureDate},</if>
+            update_time = NOW()
+        </set>
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <!-- 根据工号查询社員（唯一性校验用） -->
+    <select id="selectByEmpId" resultType="com.dms.server.entity.EmployeeInfo">
+        SELECT id, emp_id, name, type, is_deleted
+        FROM employee_info
+        WHERE emp_id = #{empId} AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 逻辑删除社員 -->
+    <update id="deleteEmployeeById">
+        UPDATE employee_info
+        SET is_deleted = 1, update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+</mapper>
